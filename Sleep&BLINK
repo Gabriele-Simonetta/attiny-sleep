@@ -1,0 +1,109 @@
+/*
+  ATtiny85 sleep mode and wake on pin change
+  Author: Davide Gariselli
+  Original version made by Nick Gammon https://goo.gl/62b0Im
+  // ATMEL ATTINY 25/45/85 / ARDUINO
+  //
+  //                  +- \/-+
+  // Ain0 (D 5) PB5  1|*    |8  Vcc
+  // Ain3 (D 3) PB3  2|     |7  PB2 (D 2) Ain1
+  // Ain2 (D 4) PB4  3|     |6  PB1 (D 1) pwm1
+  //            GND  4|     |5  PB0 (D 0) pwm0\
+  //                  +-----+
+
+  It's works with 3,3V (8Mhz) or 5V (8Mhz or 16Mhz)
+*/
+
+// PinChangeInterrupt ( attachPCINT ) Library 1.2.4 https://goo.gl/WhlCwl
+#include <PinChangeInterrupt.h>
+#include <avr/sleep.h> // Sleep Modes https://goo.gl/WJUszs
+#include <avr/power.h> // Power management https://goo.gl/58Vdvv
+
+#define led_pin 3                    // the number of the LED pin BLU
+#define led_pin 4                    // the number of the LED pin BLU
+
+#define SWITCH 2                     // D2
+const long tempolampeggio = 1000;    // interval at which to blink (milliseconds)
+const long mezzora = 1800000UL; // tempo
+const long timesleep = 1860000UL;
+bool led_status = false;
+unsigned long previousMillis; // will store last time LED was updated
+unsigned long previous;       // will store last time LED was updated
+unsigned long puntateprec;    // will store last time LED was updated
+unsigned long currentMillis;
+void setup()
+{
+  pinMode(led_pin, OUTPUT);
+  pinMode(SWITCH, INPUT_PULLUP); // internal pull-up
+                                 // Valid interrupt modes are: RISING, FALLING or CHANGE
+  attachPCINT(digitalPinToPinChangeInterrupt(SWITCH), wakeUpNow, FALLING);
+}
+
+void loop()
+{
+  if (puntateprec == 0)
+  {
+    currentMillis = millis();
+  }
+  else
+  {
+    currentMillis = millis() - puntateprec;
+  }
+  if (currentMillis <= 6000)
+  {
+    if (currentMillis - previous >= (tempolampeggio/2))
+    {
+      // save the last time you blinked the LED
+      previous = currentMillis;
+      led_status = !led_status;
+      digitalWrite(led_pin, led_status);
+    }
+    digitalWrite(led_pin, false);
+  }
+  if (currentMillis - previousMillis >= tempolampeggio)
+    {
+      // save the last time you blinked the LED
+      previousMillis = currentMillis;
+      led_status = !led_status;
+      digitalWrite(led_pin, led_status);
+    }
+
+  if (currentMillis >= mezzora)
+  {
+    if (currentMillis - previousMillis >= tempolampeggio)
+    {
+      // save the last time you blinked the LED
+      previousMillis = currentMillis;
+      led_status = !led_status;
+      digitalWrite(led_pin, led_status);
+    }
+    if (currentMillis >= timesleep)
+    {
+      goToSleep();
+    }
+  }
+} // end of loop
+
+void wakeUpNow()
+{
+  puntateprec = millis();
+  bool led_status = false;
+}
+
+void goToSleep()
+{
+  //    * The 5 different modes are:
+  //     *     SLEEP_MODE_IDLE         -the least power savings
+  //     *     SLEEP_MODE_ADC
+  //     *     SLEEP_MODE_PWR_SAVE
+  //     *     SLEEP_MODE_STANDBY
+  //     *     SLEEP_MODE_PWR_DOWN     -the most power savings
+  set_sleep_mode(SLEEP_MODE_PWR_DOWN); // <avr/sleep.h>
+  ADCSRA = 0;                          // turn off ADC
+  power_all_disable();                 // power off ADC, Timer 0 and 1, serial interface <avr/power.h>
+  sleep_enable();                      // <avr/sleep.h>
+  sleep_cpu();                         // <avr/sleep.h>
+  //---------------  THE PROGRAM CONTINUES FROM HERE AFTER WAKING UP ---------------
+  sleep_disable();    // <avr/sleep.h>
+  power_all_enable(); // power everything back on <avr/power.h>
+}
